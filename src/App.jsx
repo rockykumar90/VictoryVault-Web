@@ -63,7 +63,7 @@ export default function App() {
   const progress = Math.min(scrollY / 150, 1);
 
   return (
-    <div className="min-h-screen flex flex-col font-sans">
+    <div className="min-h-screen flex flex-col font-sans w-full">
       {currentMode === 'dashboard' && (
         <div 
           onClick={() => setMode('dashboard')}
@@ -104,7 +104,8 @@ export default function App() {
             fontSize: descRect ? `${descRect.height * 0.95}px` : '1.125rem',
             left: descRect ? `calc(${descRect.left}px - ${progress * (descRect.left - (window.innerWidth - 24 - descRect.width * (12 / descRect.height)))}px)` : '50%',
             top: descRect ? `calc(${descRect.top}px - ${scrollY}px - ${progress * (descRect.top - scrollY - 30)}px)` : '240px',
-            transform: descRect ? `scale(${1 - progress * (1 - (12 / descRect.height))})` : 'translate(-50%, 0)'
+            transform: descRect ? `scale(${1 - progress * (1 - (12 / descRect.height))})` : 'translate(-50%, 0)',
+            opacity: (typeof window !== 'undefined' && window.innerWidth < 768) ? Math.max(0, 1 - progress * 1.5) : 1
           }}
           className="select-none text-center"
         >
@@ -183,7 +184,7 @@ export default function App() {
       </header>
 
       {/* Main Workspace content */}
-      <main className="flex-1 w-full relative z-10 flex flex-col">
+      <main className="flex-1 w-full relative z-10 flex flex-col overflow-x-hidden">
         {currentMode === 'dashboard' && <Dashboard />}
         {currentMode === 'pdf-converter' && <PdfSuite />}
         {currentMode === 'passport-generator' && <PassportStudio />}

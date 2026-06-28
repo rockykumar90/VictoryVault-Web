@@ -9,8 +9,11 @@ import {
   Save, 
   Move,
   RotateCcw,
-  Wand2
+  Wand2,
+  Sparkles,
+  AlertCircle
 } from 'lucide-react';
+import { useAppStore } from '../../store/useAppStore';
 
 export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCancel }) {
   const containerRef = useRef(null);
@@ -21,7 +24,7 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
   
   const [brushSize, setBrushSize] = useState(15);
   const [tolerance, setTolerance] = useState(25); // For magic wand
-  const [tool, setTool] = useState('erase'); // 'erase' | 'restore' | 'magic-wand' | 'pan'
+  const [tool, setTool] = useState('magic-wand'); // 'erase' | 'restore' | 'magic-wand' | 'pan'
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isDrawing, setIsDrawing] = useState(false);
@@ -448,6 +451,190 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
     onSave(finalDataUrl);
   };
 
+  const [isAiRunning, setIsAiRunning] = useState(false);
+  const [aiProgress, setAiProgress] = useState(0);
+  const [aiMessage, setAiMessage] = useState('Initializing AI Background Removal...');
+  const [aiError, setAiError] = useState(null);
+
+  const applyBgRemovedImage = (bgRemImg) => {
+    const maskCanvas = maskCanvasRef.current;
+    if (!maskCanvas) return;
+    const maskCtx = maskCanvas.getContext('2d');
+    const width = canvasSize.width;
+    const height = canvasSize.height;
+
+    // Clear and draw new bg removed image
+    maskCtx.clearRect(0, 0, width, height);
+    maskCtx.drawImage(bgRemImg, 0, 0, width, height);
+    
+    const imgData = maskCtx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+
+    // Convert pixels to mask: white if not transparent, transparent if transparent
+    for (let i = 0; i < data.length; i += 4) {
+      const alpha = data[i + 3];
+      if (alpha > 5) {
+        data[i] = 255;     // R
+        data[i + 1] = 255; // G
+        data[i + 2] = 255; // B
+        data[i + 3] = 255; // Alpha
+      } else {
+        data[i] = 0;
+        data[i + 1] = 0;
+        data[i + 2] = 0;
+        data[i + 3] = 0;
+      }
+    }
+    maskCtx.putImageData(imgData, 0, 0);
+
+    // Save to undo stack
+    const newMaskData = maskCtx.getImageData(0, 0, width, height);
+    setUndoStack([...undoStack, newMaskData]);
+    setRedoStack([]);
+    
+    draw();
+  };
+
+  const handleRunAiBgRemoval = async () => {
+    let isSubscribed = true;
+    let progressInterval = null;
+
+    try {
+      setIsAiRunning(true);
+      setAiProgress(15);
+      setAiMessage('Uploading photo to secure AI server...');
+      setAiError(null);
+
+      // Simulated progress interval
+      let progressVal = 15;
+      progressInterval = setInterval(() => {
+        if (progressVal < 90) {
+          progressVal += 5;
+          if (isSubscribed) {
+            setAiProgress(progressVal);
+            if (progressVal < 35) {
+              setAiMessage('Uploading photo to secure AI server...');
+            } else if (progressVal < 55) {
+              setAiMessage('Connecting to high-precision BiRefNet model...');
+            } else if (progressVal < 70) {
+              setAiMessage('Analyzing portrait features & hair edges...');
+            } else if (progressVal < 85) {
+              setAiMessage('Refining transparency mask...');
+            } else {
+              setAiMessage('Downloading transparent output image...');
+            }
+          }
+        }
+      }, 1200);
+
+      // Convert originalSrc (which is cropped image) to blob
+      const response = await fetch(originalSrc);
+      const blob = await response.blob();
+      const file = new File([blob], 'passport-crop.jpg', { type: 'image/jpeg' });
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Get API keys from Zustand store
+      const state = useAppStore.getState();
+      const removeBgApiKey = state.removeBgApiKey;
+      const hfToken = state.hfToken;
+
+      const headers = {};
+      if (removeBgApiKey) {
+        headers['x-remove-bg-api-key'] = removeBgApiKey;
+      }
+      if (hfToken) {
+        headers['x-hf-token'] = hfToken;
+      }
+
+      // Query backend proxy API
+      const apiBaseUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://victoryvault-api.onrender.com');
+      const apiResponse = await fetch(`${apiBaseUrl}/api/remove-bg`, {
+        method: 'POST',
+        headers: headers,
+        body: formData
+      });
+
+      if (progressInterval) clearInterval(progressInterval);
+
+      if (!apiResponse.ok) {
+        const errData = await apiResponse.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error (${apiResponse.status})`);
+      }
+
+      const resultData = await apiResponse.json();
+      if (resultData.url) {
+        if (isSubscribed) {
+          setAiProgress(100);
+          // Load image and apply
+          const bgRemImg = new Image();
+          bgRemImg.crossOrigin = 'anonymous';
+          bgRemImg.onload = () => {
+            applyBgRemovedImage(bgRemImg);
+            setIsAiRunning(false);
+          };
+          bgRemImg.onerror = () => {
+            setIsAiRunning(false);
+            setAiError('Failed to load returned transparent image');
+          };
+          bgRemImg.src = resultData.url;
+        }
+        return;
+      }
+      throw new Error('Server returned empty background url');
+
+    } catch (err) {
+      if (progressInterval) clearInterval(progressInterval);
+      console.warn('Cloud AI background removal failed, launching local browser AI engine fallback...', err);
+
+      if (!isSubscribed) return;
+
+      // Fallback: Local Client-side AI removal using @imgly
+      try {
+        setAiMessage('Using local browser AI engine fallback...');
+        setAiProgress(40);
+        
+        const removeBackgroundModule = await import('@imgly/background-removal');
+        const removeBackground = removeBackgroundModule.removeBackground || removeBackgroundModule.default || removeBackgroundModule;
+
+        if (!isSubscribed) return;
+
+        const resultBlob = await removeBackground(originalSrc, {
+          progress: (key, current, total) => {
+            if (isSubscribed) {
+              const pct = Math.round((current / total) * 100);
+              if (key.includes('fetch')) {
+                setAiMessage(`Downloading local models: ${pct}%`);
+                setAiProgress(40 + Math.round(pct * 0.3));
+              } else {
+                setAiMessage(`Local inference: ${pct}%`);
+                setAiProgress(70 + Math.round(pct * 0.25));
+              }
+            }
+          }
+        });
+
+        if (!isSubscribed) return;
+
+        setAiProgress(100);
+        const resultUrl = URL.createObjectURL(resultBlob);
+        const bgRemImg = new Image();
+        bgRemImg.onload = () => {
+          applyBgRemovedImage(bgRemImg);
+          setIsAiRunning(false);
+        };
+        bgRemImg.src = resultUrl;
+      } catch (fallbackErr) {
+        console.error('Local background removal also failed:', fallbackErr);
+        if (isSubscribed) {
+          setAiError('Both cloud AI and local browser AI engines failed to remove background.');
+          setIsAiRunning(false);
+        }
+      }
+    }
+  };
+
   const handleReset = () => {
     if (undoStack.length > 0) {
       const maskCtx = maskCanvasRef.current.getContext('2d');
@@ -461,97 +648,147 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
   return (
     <div className="flex flex-col h-full space-y-6">
       {/* Top Workspace Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white/3 p-4 rounded-2xl border border-white/5">
+      <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4 bg-white/3 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-white/5 w-full">
         {/* Tool selectors */}
-        <div className="flex flex-wrap gap-1.5 bg-black/40 p-1.5 rounded-xl border border-white/5">
+        <div className="flex flex-wrap gap-1 sm:gap-1.5 bg-black/40 p-1 sm:p-1.5 rounded-xl border border-white/5 w-full md:w-auto">
+          <button 
+            type="button"
+            onClick={handleRunAiBgRemoval}
+            disabled={isAiRunning}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 rounded-lg text-[10px] sm:text-xs font-semibold cursor-pointer transition-all disabled:opacity-50
+              bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300`}
+            title="Automatically remove background using AI"
+          >
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400" />
+            Automatic BG Remove
+          </button>
+          
           <button 
             onClick={() => setTool('erase')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-semibold cursor-pointer transition-all
               ${tool === 'erase' ? 'bg-red-500/15 border border-red-500/30 text-red-400' : 'text-gray-400 hover:text-white'}`}
           >
-            <Eraser className="w-4 h-4" />
+            <Eraser className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Erase Brush
           </button>
           
           <button 
             onClick={() => setTool('restore')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-semibold cursor-pointer transition-all
               ${tool === 'restore' ? 'bg-green-500/15 border border-green-500/30 text-green-400' : 'text-gray-400 hover:text-white'}`}
           >
-            <Paintbrush className="w-4 h-4" />
+            <Paintbrush className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Restore Brush
           </button>
 
           <button 
             onClick={() => setTool('magic-wand')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-semibold cursor-pointer transition-all
               ${tool === 'magic-wand' ? 'bg-purple-500/15 border border-purple-500/30 text-purple-400' : 'text-gray-400 hover:text-white'}`}
           >
-            <Wand2 className="w-4 h-4" />
+            <Wand2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Magic Wand
           </button>
 
           <button 
             onClick={() => setTool('pan')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-semibold cursor-pointer transition-all
               ${tool === 'pan' ? 'bg-blue-500/15 border border-blue-500/30 text-blue-400' : 'text-gray-400 hover:text-white'}`}
           >
-            <Move className="w-4 h-4" />
+            <Move className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Pan / Zoom Drag
           </button>
         </div>
 
         {/* Undo Redo resets */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <button 
             onClick={handleUndo} 
             disabled={undoStack.length <= 1}
-            className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white disabled:opacity-35 cursor-pointer"
+            className="p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white disabled:opacity-35 cursor-pointer"
             title="Undo"
           >
-            <Undo2 className="w-4.5 h-4.5" />
+            <Undo2 className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" />
           </button>
           
           <button 
             onClick={handleRedo} 
             disabled={redoStack.length === 0}
-            className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white disabled:opacity-35 cursor-pointer"
+            className="p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white disabled:opacity-35 cursor-pointer"
             title="Redo"
           >
-            <Redo2 className="w-4.5 h-4.5" />
+            <Redo2 className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" />
           </button>
 
           <button 
             onClick={handleReset} 
-            className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:text-red-300 cursor-pointer"
+            className="p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:text-red-300 cursor-pointer"
             title="Reset changes"
           >
-            <RotateCcw className="w-4.5 h-4.5" />
+            <RotateCcw className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" />
           </button>
         </div>
 
         {/* Zoom Controls */}
-        <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
+        <div className="flex items-center gap-1 sm:gap-2 bg-black/40 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl border border-white/5">
           <button 
             onClick={() => setZoom(Math.max(1, zoom - 0.25))}
             className="p-1 rounded bg-white/5 text-gray-400 hover:text-white cursor-pointer"
           >
-            <ZoomOut className="w-4 h-4" />
+            <ZoomOut className="w-3 h-3 sm:w-4 sm:h-4" />
           </button>
-          <span className="text-xs font-bold text-white min-w-[35px] text-center">
+          <span className="text-[10px] sm:text-xs font-bold text-white min-w-[30px] sm:min-w-[35px] text-center">
             {Math.round(zoom * 100)}%
           </span>
           <button 
             onClick={() => setZoom(Math.min(4, zoom + 0.25))}
             className="p-1 rounded bg-white/5 text-gray-400 hover:text-white cursor-pointer"
           >
-            <ZoomIn className="w-4 h-4" />
+            <ZoomIn className="w-3 h-3 sm:w-4 sm:h-4" />
           </button>
         </div>
       </div>
 
       {/* Editor Canvas Box */}
       <div className="flex-1 flex items-center justify-center min-h-[350px] relative overflow-hidden bg-black/50 border border-white/5 rounded-2xl p-4">
+        {isAiRunning && (
+          <div className="absolute inset-0 z-20 bg-black/85 flex flex-col items-center justify-center p-8 text-center backdrop-blur-sm">
+            <div className="relative w-16 h-16 mx-auto flex items-center justify-center mb-4">
+              <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                <RotateCcw className="w-6 h-6 text-blue-400 animate-spin" />
+              </div>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">Removing Background</h3>
+            <p className="text-xs text-gray-400 mb-4">{aiMessage}</p>
+            <div className="space-y-1.5 w-full max-w-[280px]">
+              <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden border border-white/5">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${aiProgress}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-gray-500 font-bold tracking-widest">{aiProgress}% COMPLETED</span>
+            </div>
+          </div>
+        )}
+
+        {aiError && (
+          <div className="absolute bottom-4 right-4 z-20 bg-red-950/95 border border-red-500/30 text-white rounded-xl p-4 max-w-sm shadow-2xl flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <h4 className="text-xs font-bold text-red-300">AI Removal Failed</h4>
+              <p className="text-[11px] text-gray-300 leading-normal">{aiError}</p>
+              <button 
+                type="button"
+                onClick={() => setAiError(null)}
+                className="text-[10px] text-red-400 hover:text-red-300 font-bold underline cursor-pointer mt-1"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Dynamic Tool Adjustments Panel */}
         <div className="absolute bottom-4 left-4 z-10 bg-black/75 px-4 py-3 rounded-xl border border-white/10 text-xs text-gray-400 w-48 space-y-2">
           {tool === 'magic-wand' ? (
@@ -634,7 +871,7 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
           onClick={onCancel}
           className="px-5 py-2.5 rounded-xl bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-sm font-semibold cursor-pointer"
         >
-          Back to AI step
+          Back to Crop
         </button>
         <button
           onClick={handleSaveResult}

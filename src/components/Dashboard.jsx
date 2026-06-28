@@ -34,6 +34,7 @@ function ScrollCard({ children, className, index }) {
       const isMobile = windowWidth < 768;
       const goesLeft = isMobile ? (index % 2 === 0) : isLeft;
       const goesRight = isMobile ? (index % 2 !== 0) : isRight;
+      const maxDisplacement = isMobile ? 30 : 120;
 
       if (rect.bottom > 0 && rect.top < windowHeight) {
         const absDistY = Math.abs(distanceY);
@@ -41,7 +42,7 @@ function ScrollCard({ children, className, index }) {
         const factor = Math.min(1, Math.max(0, (absDistY - 0.15) / 0.85));
 
         // Displacement factor: smooth non-linear scale
-        const displacement = Math.pow(factor, 1.5) * 120; // max 120px displacement
+        const displacement = Math.pow(factor, 1.5) * maxDisplacement;
 
         if (goesLeft) {
           translateX = -displacement;
@@ -57,8 +58,8 @@ function ScrollCard({ children, className, index }) {
       } else {
         // Fully out of viewport
         opacity = 0.3;
-        if (goesLeft) translateX = -120;
-        if (goesRight) translateX = 120;
+        if (goesLeft) translateX = -maxDisplacement;
+        if (goesRight) translateX = maxDisplacement;
         if (!goesLeft && !goesRight) scale = 0.88;
       }
 
@@ -98,13 +99,13 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[85vh] px-4 py-8">
       {/* Hero Header */}
-      <div className="text-center max-w-2xl mb-12 animate-fade-in">
+      <div className="text-center max-w-2xl mb-12 animate-fade-in w-full px-4 overflow-hidden">
         <h1 
-          className="text-4xl md:text-6xl font-extrabold tracking-tight text-transparent mb-6 select-none"
+          className="text-3xl sm:text-4xl md:text-6xl font-extrabold tracking-tight text-transparent mb-6 select-none whitespace-nowrap"
         >
           <span id="hero-title">Victory Vault</span>
         </h1>
-        <p className="text-lg text-transparent leading-relaxed select-none">
+        <p className="text-xs sm:text-sm md:text-lg text-transparent leading-relaxed select-none whitespace-nowrap">
           <span id="hero-desc">Private browser-based document & photo suite</span>
         </p>
       </div>

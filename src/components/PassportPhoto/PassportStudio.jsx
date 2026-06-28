@@ -63,6 +63,75 @@ export default function PassportStudio() {
   const [rotation, setRotation] = useState(0);
   const imageRef = useRef(null);
   const [selectedSlots, setSelectedSlots] = useState(Array.from({ length: 8 }, (_, i) => i));
+
+  // Zoom and Pan states
+  const cropContainerRef = useRef(null);
+  const [zoom, setZoom] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+
+  const handlePanXChange = (val) => {
+    setPanX(val);
+    const el = cropContainerRef.current;
+    if (el) {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      el.scrollLeft = (val / 100) * maxScroll;
+    }
+  };
+
+  const handlePanYChange = (val) => {
+    setPanY(val);
+    const el = cropContainerRef.current;
+    if (el) {
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      el.scrollTop = (val / 100) * maxScroll;
+    }
+  };
+
+  const handleContainerScroll = () => {
+    const el = cropContainerRef.current;
+    if (el) {
+      const maxScrollX = el.scrollWidth - el.clientWidth;
+      const maxScrollY = el.scrollHeight - el.clientHeight;
+      
+      if (maxScrollX > 0) {
+        setPanX(Math.round((el.scrollLeft / maxScrollX) * 100));
+      } else {
+        setPanX(0);
+      }
+      
+      if (maxScrollY > 0) {
+        setPanY(Math.round((el.scrollTop / maxScrollY) * 100));
+      } else {
+        setPanY(0);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (zoom === 1) {
+      setPanX(0);
+      setPanY(0);
+      const el = cropContainerRef.current;
+      if (el) {
+        el.scrollLeft = 0;
+        el.scrollTop = 0;
+      }
+    }
+  }, [zoom]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleContainerScroll();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [zoom]);
+
+  useEffect(() => {
+    setZoom(1);
+    setPanX(0);
+    setPanY(0);
+  }, [passportSrc]);
   
   // AI loader states
   const [aiProgress, setAiProgress] = useState(0);
@@ -71,26 +140,9 @@ export default function PassportStudio() {
 
   // Trigger crop save
   const onImageLoad = (e) => {
-    const { width, height } = e.currentTarget;
-    const aspect = 3.5 / 4.5;
-    let cropWidth = width * 0.8;
-    let cropHeight = cropWidth / aspect;
-
-    if (cropHeight > height) {
-      cropHeight = height * 0.8;
-      cropWidth = cropHeight * aspect;
-    }
-
-    const newCrop = {
-      unit: 'px',
-      width: cropWidth,
-      height: cropHeight,
-      x: (width - cropWidth) / 2,
-      y: (height - cropHeight) / 2
-    };
-
-    setCrop(newCrop);
-    setCompletedCrop(newCrop);
+    // No default crop selection; user draws selection manually
+    setCrop(null);
+    setCompletedCrop(null);
   };
 
   const handleSaveCrop = async () => {
@@ -286,8 +338,8 @@ export default function PassportStudio() {
   const getEnhancedPhotoDataUrl = () => {
     return new Promise((resolve) => {
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = 413; // 3.5cm in 300 DPI
-      tempCanvas.height = 531; // 4.5cm in 300 DPI
+      tempCanvas.width = 425; // 3.6cm in 300 DPI
+      tempCanvas.height = 461; // 3.9cm in 300 DPI
       const ctx = tempCanvas.getContext('2d');
 
       // Paint BG
@@ -321,27 +373,28 @@ export default function PassportStudio() {
     const a4Width = 210;
     const a4Height = 297;
     
-    const photoWidth = 35; // mm
-    const photoHeight = 45; // mm
-    const gap = 2; // mm
+    const photoWidth = 36; // mm
+    const photoHeight = 39; // mm
+    const colGap = 2; // mm
+    const rowGap = 3; // mm
     const cols = 5;
-    const rows = 6;
+    const rows = 7;
 
     // Calculate grid starting coordinates to center on A4 page
-    const gridWidth = cols * photoWidth + (cols - 1) * gap;
-    const gridHeight = rows * photoHeight + (rows - 1) * gap;
+    const gridWidth = cols * photoWidth + (cols - 1) * colGap;
+    const gridHeight = rows * photoHeight + (rows - 1) * rowGap;
 
     const startX = (a4Width - gridWidth) / 2;
     const startY = (a4Height - gridHeight) / 2;
 
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 35; i++) {
       if (!selectedSlots.includes(i)) continue;
 
       const col = i % cols;
       const row = Math.floor(i / cols);
 
-      const x = startX + col * (photoWidth + gap);
-      const y = startY + row * (photoHeight + gap);
+      const x = startX + col * (photoWidth + colGap);
+      const y = startY + row * (photoHeight + rowGap);
 
       // Draw photo
       pdf.addImage(imgData, 'JPEG', x, y, photoWidth, photoHeight);
@@ -378,14 +431,15 @@ export default function PassportStudio() {
 
     const mmToPx = (mm) => Math.round((mm / 25.4) * 300);
 
-    const photoWidthPx = mmToPx(35);
-    const photoHeightPx = mmToPx(45);
-    const gapPx = mmToPx(2);
+    const photoWidthPx = mmToPx(36);
+    const photoHeightPx = mmToPx(39);
+    const colGapPx = mmToPx(2);
+    const rowGapPx = mmToPx(3);
     const cols = 5;
-    const rows = 6;
+    const rows = 7;
 
-    const startX = (210 - (cols * 35 + (cols - 1) * 2)) / 2;
-    const startY = (297 - (rows * 45 + (rows - 1) * 2)) / 2;
+    const startX = (210 - (cols * 36 + (cols - 1) * 2)) / 2;
+    const startY = (297 - (rows * 39 + (rows - 1) * 3)) / 2;
 
     const startXPx = mmToPx(startX);
     const startYPx = mmToPx(startY);
@@ -393,14 +447,14 @@ export default function PassportStudio() {
     const img = new Image();
     img.onload = () => {
       // Draw Grid
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 35; i++) {
         if (!selectedSlots.includes(i)) continue;
 
         const col = i % cols;
         const row = Math.floor(i / cols);
 
-        const x = startXPx + col * (photoWidthPx + gapPx);
-        const y = startYPx + row * (photoHeightPx + gapPx);
+        const x = startXPx + col * (photoWidthPx + colGapPx);
+        const y = startYPx + row * (photoHeightPx + rowGapPx);
 
         // Draw photo
         ctx.drawImage(img, x, y, photoWidthPx, photoHeightPx);
@@ -495,77 +549,84 @@ export default function PassportStudio() {
               Aspect Ratio Alignment
             </h3>
             
-            <div className="relative w-full max-h-[400px] bg-black/40 rounded-xl border border-white/5 p-4 flex items-center justify-center overflow-auto">
-              <ReactCrop
-                crop={crop}
-                onChange={(c) => setCrop(c)}
-                onComplete={(c) => setCompletedCrop(c)}
-                aspect={3.5 / 4.5}
-                className="max-h-full"
-              >
-                <img
-                  ref={imageRef}
-                  src={passportSrc}
-                  alt="Passport source"
-                  style={{ transform: `rotate(${rotation}deg)`, maxHeight: '320px' }}
-                  onLoad={onImageLoad}
-                />
-              </ReactCrop>
+            <div className="flex flex-col items-center w-full gap-2">
+              <div className="flex items-stretch w-full gap-3 h-[280px] sm:h-[400px]">
+                {/* Image Crop Container */}
+                <div 
+                  ref={cropContainerRef}
+                  onScroll={handleContainerScroll}
+                  className="relative flex-1 bg-black/40 rounded-xl border border-white/5 p-4 overflow-auto flex"
+                >
+                  <div className="m-auto">
+                    <ReactCrop
+                      crop={crop}
+                      onChange={(c) => setCrop(c)}
+                      onComplete={(c) => setCompletedCrop(c)}
+                      aspect={3.6 / 3.9}
+                      style={{
+                        maxWidth: 'none',
+                        maxHeight: 'none'
+                      }}
+                    >
+                      <img
+                        ref={imageRef}
+                        src={passportSrc}
+                        alt="Passport source"
+                        style={{ 
+                          transform: `rotate(${rotation}deg)`, 
+                          maxHeight: `${320 * zoom}px`,
+                          maxWidth: 'none',
+                          width: 'auto',
+                          height: 'auto',
+                          display: 'block'
+                        }}
+                        onLoad={onImageLoad}
+                      />
+                    </ReactCrop>
+                  </div>
+                </div>
+
+                {/* Vertical Pan Slider */}
+                {zoom > 1 && (
+                  <div className="flex flex-col items-center justify-between py-4 bg-black/20 rounded-xl border border-white/5 px-2 w-10 shrink-0">
+                    <span className="text-[9px] font-bold text-gray-500 select-none uppercase tracking-wider">Top</span>
+                    <input 
+                      type="range" 
+                      min={0} 
+                      max={100}
+                      value={panY}
+                      onChange={(e) => handlePanYChange(parseInt(e.target.value))}
+                      className="h-full w-2 accent-blue-500 cursor-pointer"
+                      style={{
+                        writingMode: 'vertical-lr',
+                        direction: 'rtl',
+                        appearance: 'slider-vertical',
+                        WebkitAppearance: 'slider-vertical'
+                      }}
+                    />
+                    <span className="text-[9px] font-bold text-gray-500 select-none uppercase tracking-wider">Bot</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Horizontal Pan Slider */}
+              {zoom > 1 && (
+                <div className="flex items-center gap-3 w-full bg-black/20 rounded-xl border border-white/5 py-2 px-4">
+                  <span className="text-[9px] font-bold text-gray-500 select-none uppercase tracking-wider">Left</span>
+                  <input 
+                    type="range" 
+                    min={0} 
+                    max={100}
+                    value={panX}
+                    onChange={(e) => handlePanXChange(parseInt(e.target.value))}
+                    className="flex-1 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                  <span className="text-[9px] font-bold text-gray-500 select-none uppercase tracking-wider">Right</span>
+                </div>
+              )}
             </div>
 
-            {/* Fine straighten rotation slider */}
-            <div className="space-y-3 pt-2 border-t border-white/5">
-              <div className="flex justify-between text-xs font-semibold text-gray-400">
-                <span>Straighten Photo (Fine Tilt)</span>
-                <span className="text-blue-400 font-bold">{rotation}°</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => setRotation(prev => {
-                    let r = prev - 90;
-                    if (r < -180) r += 360;
-                    return r;
-                  })}
-                  className="px-3 py-2 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-xs font-semibold cursor-pointer"
-                  title="Rotate 90° Left"
-                >
-                  Rotate 90° ↺
-                </button>
-                
-                <input 
-                  type="range" 
-                  min={-180} 
-                  max={180} 
-                  step={0.5}
-                  value={rotation}
-                  onChange={(e) => setRotation(parseFloat(e.target.value))}
-                  className="flex-1 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-                
-                <button 
-                  onClick={() => setRotation(prev => {
-                    let r = prev + 90;
-                    if (r > 180) r -= 360;
-                    return r;
-                  })}
-                  className="px-3 py-2 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-xs font-semibold cursor-pointer"
-                  title="Rotate 90° Right"
-                >
-                  Rotate 90° ↻
-                </button>
-              </div>
-              
-              <div className="flex justify-between items-center text-[10px] text-gray-500">
-                <span>-180° Left</span>
-                <button 
-                  onClick={() => setRotation(0)}
-                  className="text-blue-400 hover:underline cursor-pointer"
-                >
-                  Reset Straight
-                </button>
-                <span>+180° Right</span>
-              </div>
-            </div>
+
 
             <div className="flex justify-end gap-3 border-t border-white/5 pt-4">
               <button 
@@ -576,7 +637,7 @@ export default function PassportStudio() {
               </button>
               <button 
                 onClick={handleSaveCrop}
-                disabled={!completedCrop}
+                disabled={!completedCrop || !completedCrop.width || !completedCrop.height}
                 className="btn-primary px-6 py-2.5 rounded-xl text-sm font-semibold cursor-pointer bg-gradient-to-r from-blue-500 to-indigo-600 shadow-blue-500/20 disabled:opacity-50"
               >
                 Crop Photo
@@ -584,25 +645,122 @@ export default function PassportStudio() {
             </div>
           </div>
 
-          <div className="glass-panel rounded-2xl p-6 space-y-4">
-            <h4 className="font-bold text-white flex items-center gap-2">
-              <HelpCircle className="w-5 h-5 text-blue-400" />
-              Biometric Requirements
-            </h4>
-            <ul className="space-y-3 text-xs text-gray-400 leading-relaxed">
-              <li className="flex items-start gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                Align your head in the center of the grids.
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                Make sure your shoulders are slightly visible.
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                The frame is strictly locked to the standard 35mm x 45mm passport dimensions.
-              </li>
-            </ul>
+          <div className="flex flex-col gap-6 w-full">
+            {/* Biometric Requirements */}
+            <div className="glass-panel rounded-2xl p-6 space-y-4">
+              <h4 className="font-bold text-white flex items-center gap-2">
+                <HelpCircle className="w-5 h-5 text-blue-400" />
+                Biometric Requirements
+              </h4>
+              <ul className="space-y-3 text-xs text-gray-400 leading-relaxed">
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                  Align your head in the center of the grids.
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                  Make sure your shoulders are slightly visible.
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                  The frame is strictly locked to the standard 3.6cm x 3.9cm passport dimensions.
+                </li>
+              </ul>
+            </div>
+
+            {/* Alignment Controls Card */}
+            <div className="glass-panel rounded-2xl p-6 space-y-6">
+              <h4 className="font-bold text-white flex items-center gap-2">
+                <SlidersHorizontal className="w-5 h-5 text-blue-400" />
+                Alignment Controls
+              </h4>
+
+              {/* Fine straighten rotation slider */}
+              <div className="space-y-3">
+                <div className="flex justify-between text-xs font-semibold text-gray-400">
+                  <span>Straighten Photo (Fine Tilt)</span>
+                  <span className="text-blue-400 font-bold">{rotation}°</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <input 
+                    type="range" 
+                    min={-180} 
+                    max={180} 
+                    step={0.5}
+                    value={rotation}
+                    onChange={(e) => setRotation(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                  <div className="flex gap-2 w-full">
+                    <button 
+                      onClick={() => setRotation(prev => {
+                        let r = prev - 90;
+                        if (r < -180) r += 360;
+                        return r;
+                      })}
+                      className="flex-1 py-2 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-xs font-semibold cursor-pointer text-center"
+                      title="Rotate 90° Left"
+                    >
+                      90° ↺
+                    </button>
+                    <button 
+                      onClick={() => setRotation(0)}
+                      className="px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:text-blue-300 transition-colors text-xs font-semibold cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                    <button 
+                      onClick={() => setRotation(prev => {
+                        let r = prev + 90;
+                        if (r > 180) r -= 360;
+                        return r;
+                      })}
+                      className="flex-1 py-2 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white hover:bg-white/10 transition-colors text-xs font-semibold cursor-pointer text-center"
+                      title="Rotate 90° Right"
+                    >
+                      90° ↻
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Zoom Slider */}
+              <div className="space-y-3 pt-4 border-t border-white/5">
+                <div className="flex justify-between text-xs font-semibold text-gray-400">
+                  <span>Zoom Level</span>
+                  <span className="text-blue-400 font-bold">{Math.round(zoom * 100)}%</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => {
+                      const newZoom = Math.max(1, zoom - 0.2);
+                      setZoom(newZoom);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/5 text-gray-300 hover:text-white text-xs font-bold cursor-pointer animate-none"
+                  >
+                    -
+                  </button>
+                  <input 
+                    type="range" 
+                    min={1} 
+                    max={4} 
+                    step={0.05}
+                    value={zoom}
+                    onChange={(e) => setZoom(parseFloat(e.target.value))}
+                    className="flex-1 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                  <button 
+                    onClick={() => {
+                      const newZoom = Math.min(4, zoom + 0.2);
+                      setZoom(newZoom);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/5 text-gray-300 hover:text-white text-xs font-bold cursor-pointer"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -668,7 +826,7 @@ export default function PassportStudio() {
 
       {/* STEP 4: Manual Eraser Canvas */}
       {passportStatus === 'manual-edit' && (
-        <div className="glass-panel rounded-2xl p-6 border border-white/5 flex flex-col h-[80vh] min-h-[600px]">
+        <div className="glass-panel rounded-xl sm:rounded-2xl p-3 sm:p-6 border border-white/5 flex flex-col h-[75vh] sm:h-[80vh] min-h-[480px] sm:min-h-[600px]">
           <div className="mb-4">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-blue-400" />
@@ -682,7 +840,7 @@ export default function PassportStudio() {
               originalSrc={passportCropped}
               bgRemovedSrc={passportNoBg}
               onSave={handleManualSave}
-              onCancel={() => setPassportStatus('bg-remove')}
+              onCancel={() => setPassportStatus('crop')}
             />
           </div>
         </div>
@@ -695,18 +853,18 @@ export default function PassportStudio() {
           <div className="lg:col-span-1 glass-panel rounded-2xl p-6 flex flex-col items-center gap-6">
             <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider text-center w-full">Passport Preview</h3>
             
-            <div className="relative aspect-[35/45] w-full max-w-[240px] bg-black/20 rounded-xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center">
+            <div className="relative aspect-[3.6/3.9] w-full max-w-[240px] bg-black/20 rounded-xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center">
               <canvas 
                 ref={previewCanvasRef} 
-                width={413} 
-                height={531}
+                width={425} 
+                height={461}
                 className="w-full h-full object-contain"
               />
             </div>
             
             <div className="text-center">
               <span className="text-xs font-bold text-white uppercase tracking-widest px-2.5 py-1 rounded bg-white/5 border border-white/5">
-                3.5 x 4.5 cm
+                3.6 x 3.9 cm
               </span>
               <p className="text-[10px] text-gray-500 mt-2">Print Resolution: 300 DPI</p>
             </div>
@@ -835,7 +993,7 @@ export default function PassportStudio() {
             <div className="space-y-2">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Quantity Preset (Auto-Fill)</span>
               <div className="grid grid-cols-4 gap-2">
-                {[4, 8, 12, 16, 20, 24, 30].map((qty) => (
+                {[5, 10, 15, 20, 25, 30, 35].map((qty) => (
                   <button
                     key={qty}
                     onClick={() => {
@@ -901,32 +1059,30 @@ export default function PassportStudio() {
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">A4 Grid Interactive Map</h3>
               <span className="text-xs font-bold text-gray-400">
-                Slots Selected: <strong className="text-blue-400">{selectedSlots.length}</strong> / 30
+                Slots Selected: <strong className="text-blue-400">{selectedSlots.length}</strong> / 35
               </span>
             </div>
             
             {/* Mock A4 Paper with Grid */}
-            <div className="w-full bg-[#161823] border border-white/5 rounded-xl p-6 flex items-center justify-center min-h-[500px]">
+            <div className="w-full bg-[#161823] border border-white/5 rounded-xl p-3 sm:p-6 flex items-center justify-center min-h-[380px] sm:min-h-[500px]">
               <div 
-                className="bg-white text-black shadow-2xl relative transition-all duration-300 overflow-hidden flex flex-col justify-center items-center"
+                className="bg-white text-black shadow-2xl relative transition-all duration-300 overflow-hidden flex flex-col justify-center items-center w-full max-w-[340px] aspect-[210/297] p-3 sm:p-4"
                 style={{ 
-                  width: '350px', 
-                  height: '495px', // Scale: 1.414 aspect ratio of A4 paper
-                  padding: '16px'
+                  aspectRatio: '210/297'
                 }}
               >
                 {/* Tiny A4 indicator label */}
                 <div className="absolute top-1 right-2 text-[8px] font-bold text-gray-300 select-none uppercase tracking-widest">A4 Paper</div>
 
-                {/* Grid Layout Preview: Always 30 slots (5x6) */}
+                {/* Grid Layout Preview: Always 35 slots (5x7) */}
                 <div 
-                  className="grid gap-[2.5px] justify-center w-full"
+                  className="grid gap-x-[2.5px] gap-y-[3.75px] justify-center w-full"
                   style={{
                     gridTemplateColumns: `repeat(5, minmax(0, 1fr))`,
                     maxWidth: '92%'
                   }}
                 >
-                  {Array.from({ length: 30 }).map((_, index) => {
+                  {Array.from({ length: 35 }).map((_, index) => {
                     const isActive = selectedSlots.includes(index);
                     return (
                       <div 
@@ -938,7 +1094,7 @@ export default function PassportStudio() {
                             setSelectedSlots([...selectedSlots, index]);
                           }
                         }}
-                        className={`aspect-[3.5/4.5] relative flex items-center justify-center overflow-hidden cursor-pointer transition-all border
+                        className={`aspect-[3.6/3.9] relative flex items-center justify-center overflow-hidden cursor-pointer transition-all border
                           ${isActive 
                             ? 'border-solid border-gray-950 bg-gray-50' 
                             : 'border-dashed border-gray-300 bg-gray-100 hover:bg-gray-200'}`}

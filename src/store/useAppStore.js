@@ -23,14 +23,14 @@ export const useAppStore = create((set) => ({
 
   // Passport Photo Generator states
   passportSrc: null,          // Original raw image object URL
-  passportCropped: null,      // Cropped image URL (3.5x4.5 ratio)
+  passportCropped: null,      // Cropped image URL (3.6x3.9 ratio)
   passportNoBg: null,         // Background-removed image URL
   passportFinal: null,        // Final edited & enhanced image URL
   passportBgColor: '#FFFFFF', // Selected background color
   passportBrightness: 100,    // 0 - 200
   passportContrast: 100,      // 0 - 200
   passportSmoothness: 0,      // 0 - 50
-  passportCount: 8,           // 4, 8, 12, 16, etc.
+  passportCount: 5,           // 5, 10, 15, 20, etc.
   passportStatus: 'upload',   // 'upload' | 'crop' | 'bg-remove' | 'manual-edit' | 'enhancements' | 'layout'
   
   // Custom API keys for background removal
@@ -51,7 +51,8 @@ export const useAppStore = create((set) => ({
   }),
   setPassportCropped: (cropped) => set({ 
     passportCropped: cropped, 
-    passportStatus: 'bg-remove' 
+    passportNoBg: cropped,
+    passportStatus: 'manual-edit' 
   }),
   setPassportNoBg: (noBg) => set({ 
     passportNoBg: noBg,
@@ -76,7 +77,7 @@ export const useAppStore = create((set) => ({
     passportBrightness: 100,
     passportContrast: 100,
     passportSmoothness: 0,
-    passportCount: 8,
+    passportCount: 5,
     passportStatus: 'upload'
   })
 }));
