@@ -30,7 +30,7 @@ export const useAppStore = create((set) => ({
   passportBrightness: 100,    // 0 - 200
   passportContrast: 100,      // 0 - 200
   passportSmoothness: 0,      // 0 - 50
-  passportCount: 5,           // 5, 10, 15, 20, etc.
+  passportCount: 6,           // 5, 10, 15, 20, etc.
   passportStatus: 'upload',   // 'upload' | 'crop' | 'bg-remove' | 'manual-edit' | 'enhancements' | 'layout'
   
   // Custom API keys for background removal
@@ -77,7 +77,7 @@ export const useAppStore = create((set) => ({
     passportBrightness: 100,
     passportContrast: 100,
     passportSmoothness: 0,
-    passportCount: 5,
+    passportCount: 6,
     passportStatus: 'upload'
   })
 }));

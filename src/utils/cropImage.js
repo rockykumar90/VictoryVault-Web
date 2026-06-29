@@ -144,9 +144,9 @@ export async function getCroppedImgFromReactImageCrop(imageSrc, crop, elementWid
   const pixelX = x + dx;
   const pixelY = y + dy;
 
-  // Set crop canvas dimensions
-  canvas.width = pixelWidth;
-  canvas.height = pixelHeight;
+  // Stretch/squeeze the cropped area to the target passport size (366x437 pixels, representing 3.1x3.7cm at 300 DPI)
+  canvas.width = 366;
+  canvas.height = 437;
 
   ctx.drawImage(
     rotatedCanvas,
@@ -156,8 +156,8 @@ export async function getCroppedImgFromReactImageCrop(imageSrc, crop, elementWid
     pixelHeight,
     0,
     0,
-    pixelWidth,
-    pixelHeight
+    366,
+    437
   );
 
   return new Promise((resolve, reject) => {

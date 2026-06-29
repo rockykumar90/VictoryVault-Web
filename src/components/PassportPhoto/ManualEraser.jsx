@@ -11,7 +11,9 @@ import {
   RotateCcw,
   Wand2,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -19,8 +21,10 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const maskCanvasRef = useRef(null);
+  const originalCanvasRef = useRef(null);
   const originalImageRef = useRef(null);
   const lastCoordsRef = useRef(null);
+  const strokeCtxRef = useRef(null);
   
   const [brushSize, setBrushSize] = useState(15);
   const [tolerance, setTolerance] = useState(25); // For magic wand
@@ -147,9 +151,17 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
     }
     maskCtx.putImageData(imgData, 0, 0);
 
+    // Setup original image canvas (offscreen)
+    const origCanvas = originalCanvasRef.current;
+    origCanvas.width = width;
+    origCanvas.height = height;
+    const origCtx = origCanvas.getContext('2d');
+    origCtx.drawImage(origImg, 0, 0, width, height);
+
     // Save initial state to undo stack
     const initialMaskData = maskCtx.getImageData(0, 0, width, height);
-    setUndoStack([initialMaskData]);
+    const initialOrigData = origCtx.getImageData(0, 0, width, height);
+    setUndoStack([{ maskData: initialMaskData, origData: initialOrigData }]);
 
     setIsInitialized(true);
   };
@@ -184,8 +196,8 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
     bufferCanvas.height = canvas.height;
     const bufCtx = bufferCanvas.getContext('2d');
 
-    // Draw original image
-    bufCtx.drawImage(originalImageRef.current, 0, 0, canvas.width, canvas.height);
+    // Draw original image from offscreen canvas
+    bufCtx.drawImage(originalCanvasRef.current, 0, 0, canvas.width, canvas.height);
     
     // Mask it using mask canvas
     bufCtx.globalCompositeOperation = 'destination-in';
@@ -193,13 +205,22 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
 
     // Draw result onto main canvas
     ctx.drawImage(bufferCanvas, 0, 0);
+
+    // Draw active Dodge/Burn stroke preview
+    if (isDrawing && strokeCtxRef.current) {
+      ctx.drawImage(strokeCtxRef.current.canvas, 0, 0);
+    }
   };
 
   // Push new state to undo stack
   const saveState = () => {
     const maskCtx = maskCanvasRef.current.getContext('2d');
-    const state = maskCtx.getImageData(0, 0, canvasSize.width, canvasSize.height);
+    const maskData = maskCtx.getImageData(0, 0, canvasSize.width, canvasSize.height);
     
+    const origCtx = originalCanvasRef.current.getContext('2d');
+    const origData = origCtx.getImageData(0, 0, canvasSize.width, canvasSize.height);
+    
+    const state = { maskData, origData };
     const newUndoStack = [...undoStack, state];
     if (newUndoStack.length > 15) newUndoStack.shift(); // limit to 15 states
     setUndoStack(newUndoStack);
@@ -215,7 +236,10 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
 
     const prevState = newUndoStack[newUndoStack.length - 1];
     const maskCtx = maskCanvasRef.current.getContext('2d');
-    maskCtx.putImageData(prevState, 0, 0);
+    maskCtx.putImageData(prevState.maskData, 0, 0);
+
+    const origCtx = originalCanvasRef.current.getContext('2d');
+    origCtx.putImageData(prevState.origData, 0, 0);
 
     setUndoStack(newUndoStack);
     draw();
@@ -228,7 +252,10 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
     const nextState = newRedoStack.pop();
     
     const maskCtx = maskCanvasRef.current.getContext('2d');
-    maskCtx.putImageData(nextState, 0, 0);
+    maskCtx.putImageData(nextState.maskData, 0, 0);
+
+    const origCtx = originalCanvasRef.current.getContext('2d');
+    origCtx.putImageData(nextState.origData, 0, 0);
 
     setUndoStack([...undoStack, nextState]);
     setRedoStack(newRedoStack);
@@ -271,7 +298,7 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
     tempCanvas.width = width;
     tempCanvas.height = height;
     const tempCtx = tempCanvas.getContext('2d');
-    tempCtx.drawImage(originalImageRef.current, 0, 0, width, height);
+    tempCtx.drawImage(originalCanvasRef.current, 0, 0, width, height);
     
     const imgData = tempCtx.getImageData(0, 0, width, height);
     const data = imgData.data;
@@ -346,6 +373,96 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
     draw();
   };
 
+  const healSpot = (centerX, centerY, radius) => {
+    const origCanvas = originalCanvasRef.current;
+    if (!origCanvas) return;
+    const ctx = origCanvas.getContext('2d');
+    const width = origCanvas.width;
+    const height = origCanvas.height;
+
+    // Get bounding box of the healing area, with a 2px boundary padding
+    const x0 = Math.max(0, Math.floor(centerX - radius - 2));
+    const y0 = Math.max(0, Math.floor(centerY - radius - 2));
+    const w = Math.min(width - x0, Math.ceil(radius * 2 + 6));
+    const h = Math.min(height - y0, Math.ceil(radius * 2 + 6));
+
+    if (w <= 0 || h <= 0) return;
+
+    const imgData = ctx.getImageData(x0, y0, w, h);
+    const data = imgData.data;
+
+    // We want to perform Inverse Distance Weighting (IDW) interpolation
+    // to fill the circle of radius `radius` centered at (centerX - x0, centerY - y0).
+    const localCX = centerX - x0;
+    const localCY = centerY - y0;
+    const r2 = radius * radius;
+
+    // 1. Identify boundary pixels of the circle
+    const boundaryPixels = [];
+    const innerPixels = [];
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = x - localCX;
+        const dy = y - localCY;
+        const dist2 = dx * dx + dy * dy;
+        const dist = Math.sqrt(dist2);
+
+        if (dist <= radius) {
+          innerPixels.push({ x, y });
+        } else if (dist > radius && dist <= radius + 2.5) {
+          const idx = (y * w + x) * 4;
+          boundaryPixels.push({
+            x,
+            y,
+            r: data[idx],
+            g: data[idx + 1],
+            b: data[idx + 2]
+          });
+        }
+      }
+    }
+
+    if (boundaryPixels.length === 0) return;
+
+    // 2. For each inner pixel, calculate its color using IDW from boundary pixels
+    for (const p of innerPixels) {
+      let sumW = 0;
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+
+      for (const b of boundaryPixels) {
+        const dx = p.x - b.x;
+        const dy = p.y - b.y;
+        const d2 = dx * dx + dy * dy;
+        const weight = 1 / (d2 + 0.1); 
+        sumW += weight;
+        sumR += b.r * weight;
+        sumG += b.g * weight;
+        sumB += b.b * weight;
+      }
+
+      const interpR = sumR / sumW;
+      const interpG = sumG / sumW;
+      const interpB = sumB / sumW;
+
+      const idx = (p.y * w + p.x) * 4;
+
+      const dx = p.x - localCX;
+      const dy = p.y - localCY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const t = Math.max(0, Math.min(1, (radius - dist) / (radius * 0.4 || 1)));
+
+      data[idx] = Math.round(interpR * t + data[idx] * (1 - t));
+      data[idx + 1] = Math.round(interpG * t + data[idx + 1] * (1 - t));
+      data[idx + 2] = Math.round(interpB * t + data[idx + 2] * (1 - t));
+    }
+
+    ctx.putImageData(imgData, x0, y0);
+    draw();
+  };
+
   const handleStart = (e) => {
     const coords = getCanvasCoords(e);
     if (tool === 'pan') {
@@ -355,6 +472,30 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
       setDragStart({ x: clientX - panOffset.x, y: clientY - panOffset.y });
     } else if (tool === 'magic-wand') {
       runMagicWand(coords.x, coords.y);
+    } else if (tool === 'spot-healer') {
+      setIsDrawing(true);
+      healSpot(coords.x, coords.y, brushSize / 2);
+    } else if (tool === 'dodge' || tool === 'burn') {
+      setIsDrawing(true);
+      const strokeCanvas = document.createElement('canvas');
+      strokeCanvas.width = canvasSize.width;
+      strokeCanvas.height = canvasSize.height;
+      const strokeCtx = strokeCanvas.getContext('2d');
+      strokeCtx.lineWidth = brushSize;
+      strokeCtx.lineCap = 'round';
+      strokeCtx.lineJoin = 'round';
+      
+      const isDodge = tool === 'dodge';
+      strokeCtx.strokeStyle = isDodge ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)';
+      strokeCtx.fillStyle = isDodge ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)';
+      
+      strokeCtx.beginPath();
+      strokeCtx.arc(coords.x, coords.y, brushSize / 2, 0, Math.PI * 2);
+      strokeCtx.fill();
+      
+      strokeCtxRef.current = strokeCtx;
+      lastCoordsRef.current = coords;
+      draw();
     } else {
       setIsDrawing(true);
       lastCoordsRef.current = coords;
@@ -370,6 +511,20 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
         x: clientX - dragStart.x,
         y: clientY - dragStart.y
       });
+    } else if (isDrawing && tool === 'spot-healer') {
+      const coords = getCanvasCoords(e);
+      healSpot(coords.x, coords.y, brushSize / 2);
+    } else if (isDrawing && (tool === 'dodge' || tool === 'burn')) {
+      const coords = getCanvasCoords(e);
+      const strokeCtx = strokeCtxRef.current;
+      if (strokeCtx && lastCoordsRef.current) {
+        strokeCtx.beginPath();
+        strokeCtx.moveTo(lastCoordsRef.current.x, lastCoordsRef.current.y);
+        strokeCtx.lineTo(coords.x, coords.y);
+        strokeCtx.stroke();
+      }
+      lastCoordsRef.current = coords;
+      draw();
     } else if (isDrawing && lastCoordsRef.current) {
       const coords = getCanvasCoords(e);
       drawBrushLine(lastCoordsRef.current.x, lastCoordsRef.current.y, coords.x, coords.y);
@@ -377,12 +532,61 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
     }
   };
 
+  const applyDodgeBurnStroke = () => {
+    const strokeCtx = strokeCtxRef.current;
+    if (!strokeCtx) return;
+    
+    const origCanvas = originalCanvasRef.current;
+    if (!origCanvas) return;
+    const origCtx = origCanvas.getContext('2d');
+    const width = origCanvas.width;
+    const height = origCanvas.height;
+    
+    const strokeImgData = strokeCtx.getImageData(0, 0, width, height);
+    const strokeData = strokeImgData.data;
+    
+    const origImgData = origCtx.getImageData(0, 0, width, height);
+    const origData = origImgData.data;
+    
+    const isDodge = tool === 'dodge';
+    const exposure = isDodge ? 0.08 : 0.06; // Fine-tuned exposure strengths for natural blending
+    
+    for (let i = 0; i < strokeData.length; i += 4) {
+      const alpha = strokeData[i + 3]; // How much it was brushed (0 to 255)
+      if (alpha > 0) {
+        const factor = (alpha / 255) * exposure;
+        
+        if (isDodge) {
+          // Dodge formula: R = R + (255 - R) * factor
+          origData[i] = Math.max(0, Math.min(255, Math.round(origData[i] + (255 - origData[i]) * factor)));
+          origData[i + 1] = Math.max(0, Math.min(255, Math.round(origData[i + 1] + (255 - origData[i + 1]) * factor)));
+          origData[i + 2] = Math.max(0, Math.min(255, Math.round(origData[i + 2] + (255 - origData[i + 2]) * factor)));
+        } else {
+          // Burn formula: R = R - R * factor
+          origData[i] = Math.max(0, Math.min(255, Math.round(origData[i] - origData[i] * factor)));
+          origData[i + 1] = Math.max(0, Math.min(255, Math.round(origData[i + 1] - origData[i + 1] * factor)));
+          origData[i + 2] = Math.max(0, Math.min(255, Math.round(origData[i + 2] - origData[i + 2] * factor)));
+        }
+      }
+    }
+    
+    origCtx.putImageData(origImgData, 0, 0);
+    strokeCtxRef.current = null;
+    
+    saveState();
+    draw();
+  };
+
   const handleEnd = () => {
     if (isDrawing) {
       setIsDrawing(false);
       lastCoordsRef.current = null;
-      saveState();
-      draw();
+      if (tool === 'dodge' || tool === 'burn') {
+        applyDodgeBurnStroke();
+      } else {
+        saveState();
+        draw();
+      }
     }
     setIsPanning(false);
   };
@@ -443,7 +647,7 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
     finalCanvas.height = canvasSize.height;
     const finalCtx = finalCanvas.getContext('2d');
 
-    finalCtx.drawImage(originalImageRef.current, 0, 0, canvasSize.width, canvasSize.height);
+    finalCtx.drawImage(originalCanvasRef.current, 0, 0, canvasSize.width, canvasSize.height);
     finalCtx.globalCompositeOperation = 'destination-in';
     finalCtx.drawImage(maskCanvasRef.current, 0, 0);
 
@@ -638,7 +842,11 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
   const handleReset = () => {
     if (undoStack.length > 0) {
       const maskCtx = maskCanvasRef.current.getContext('2d');
-      maskCtx.putImageData(undoStack[0], 0, 0);
+      maskCtx.putImageData(undoStack[0].maskData, 0, 0);
+
+      const origCtx = originalCanvasRef.current.getContext('2d');
+      origCtx.putImageData(undoStack[0].origData, 0, 0);
+
       setUndoStack([undoStack[0]]);
       setRedoStack([]);
       draw();
@@ -688,6 +896,36 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
           >
             <Wand2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Magic Wand
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setTool('spot-healer')}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-semibold cursor-pointer transition-all
+              ${tool === 'spot-healer' ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+            Spot Healer
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setTool('dodge')}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-semibold cursor-pointer transition-all
+              ${tool === 'dodge' ? 'bg-orange-500/15 border border-orange-500/30 text-orange-400' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-400" />
+            Dodge (Lighten)
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setTool('burn')}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-semibold cursor-pointer transition-all
+              ${tool === 'burn' ? 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-400' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
+            Burn (Darken)
           </button>
 
           <button 
@@ -861,6 +1099,7 @@ export default function ManualEraser({ originalSrc, bgRemovedSrc, onSave, onCanc
             />
             {/* Hidden offscreen mask canvas */}
             <canvas ref={maskCanvasRef} className="hidden" />
+            <canvas ref={originalCanvasRef} className="hidden" />
           </div>
         </div>
       </div>

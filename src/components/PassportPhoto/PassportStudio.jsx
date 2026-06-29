@@ -338,8 +338,8 @@ export default function PassportStudio() {
   const getEnhancedPhotoDataUrl = () => {
     return new Promise((resolve) => {
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = 425; // 3.6cm in 300 DPI
-      tempCanvas.height = 461; // 3.9cm in 300 DPI
+      tempCanvas.width = 366; // 3.1cm in 300 DPI
+      tempCanvas.height = 437; // 3.7cm in 300 DPI
       const ctx = tempCanvas.getContext('2d');
 
       // Paint BG
@@ -373,11 +373,11 @@ export default function PassportStudio() {
     const a4Width = 210;
     const a4Height = 297;
     
-    const photoWidth = 36; // mm
-    const photoHeight = 39; // mm
+    const photoWidth = 31; // mm
+    const photoHeight = 37; // mm
     const colGap = 2; // mm
     const rowGap = 3; // mm
-    const cols = 5;
+    const cols = 6;
     const rows = 7;
 
     // Calculate grid starting coordinates to center on A4 page
@@ -387,7 +387,7 @@ export default function PassportStudio() {
     const startX = (a4Width - gridWidth) / 2;
     const startY = (a4Height - gridHeight) / 2;
 
-    for (let i = 0; i < 35; i++) {
+    for (let i = 0; i < 42; i++) {
       if (!selectedSlots.includes(i)) continue;
 
       const col = i % cols;
@@ -431,15 +431,15 @@ export default function PassportStudio() {
 
     const mmToPx = (mm) => Math.round((mm / 25.4) * 300);
 
-    const photoWidthPx = mmToPx(36);
-    const photoHeightPx = mmToPx(39);
+    const photoWidthPx = mmToPx(31);
+    const photoHeightPx = mmToPx(37);
     const colGapPx = mmToPx(2);
     const rowGapPx = mmToPx(3);
-    const cols = 5;
+    const cols = 6;
     const rows = 7;
 
-    const startX = (210 - (cols * 36 + (cols - 1) * 2)) / 2;
-    const startY = (297 - (rows * 39 + (rows - 1) * 3)) / 2;
+    const startX = (210 - (cols * 31 + (cols - 1) * 2)) / 2;
+    const startY = (297 - (rows * 37 + (rows - 1) * 3)) / 2;
 
     const startXPx = mmToPx(startX);
     const startYPx = mmToPx(startY);
@@ -447,7 +447,7 @@ export default function PassportStudio() {
     const img = new Image();
     img.onload = () => {
       // Draw Grid
-      for (let i = 0; i < 35; i++) {
+      for (let i = 0; i < 42; i++) {
         if (!selectedSlots.includes(i)) continue;
 
         const col = i % cols;
@@ -562,7 +562,6 @@ export default function PassportStudio() {
                       crop={crop}
                       onChange={(c) => setCrop(c)}
                       onComplete={(c) => setCompletedCrop(c)}
-                      aspect={3.6 / 3.9}
                       style={{
                         maxWidth: 'none',
                         maxHeight: 'none'
@@ -663,7 +662,7 @@ export default function PassportStudio() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                  The frame is strictly locked to the standard 3.6cm x 3.9cm passport dimensions.
+                  The frame is strictly locked to the standard 3.1cm x 3.7cm passport dimensions.
                 </li>
               </ul>
             </div>
@@ -853,18 +852,18 @@ export default function PassportStudio() {
           <div className="lg:col-span-1 glass-panel rounded-2xl p-6 flex flex-col items-center gap-6">
             <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider text-center w-full">Passport Preview</h3>
             
-            <div className="relative aspect-[3.6/3.9] w-full max-w-[240px] bg-black/20 rounded-xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center">
+            <div className="relative aspect-[3.1/3.7] w-full max-w-[240px] bg-black/20 rounded-xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center">
               <canvas 
                 ref={previewCanvasRef} 
-                width={425} 
-                height={461}
+                width={366} 
+                height={437}
                 className="w-full h-full object-contain"
               />
             </div>
             
             <div className="text-center">
               <span className="text-xs font-bold text-white uppercase tracking-widest px-2.5 py-1 rounded bg-white/5 border border-white/5">
-                3.6 x 3.9 cm
+                3.1 x 3.7 cm
               </span>
               <p className="text-[10px] text-gray-500 mt-2">Print Resolution: 300 DPI</p>
             </div>
@@ -993,7 +992,7 @@ export default function PassportStudio() {
             <div className="space-y-2">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Quantity Preset (Auto-Fill)</span>
               <div className="grid grid-cols-4 gap-2">
-                {[5, 10, 15, 20, 25, 30, 35].map((qty) => (
+                {[6, 12, 18, 24, 30, 36, 42].map((qty) => (
                   <button
                     key={qty}
                     onClick={() => {
@@ -1059,7 +1058,7 @@ export default function PassportStudio() {
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">A4 Grid Interactive Map</h3>
               <span className="text-xs font-bold text-gray-400">
-                Slots Selected: <strong className="text-blue-400">{selectedSlots.length}</strong> / 35
+                Slots Selected: <strong className="text-blue-400">{selectedSlots.length}</strong> / 42
               </span>
             </div>
             
@@ -1074,15 +1073,15 @@ export default function PassportStudio() {
                 {/* Tiny A4 indicator label */}
                 <div className="absolute top-1 right-2 text-[8px] font-bold text-gray-300 select-none uppercase tracking-widest">A4 Paper</div>
 
-                {/* Grid Layout Preview: Always 35 slots (5x7) */}
+                {/* Grid Layout Preview: Always 42 slots (6x7) */}
                 <div 
                   className="grid gap-x-[2.5px] gap-y-[3.75px] justify-center w-full"
                   style={{
-                    gridTemplateColumns: `repeat(5, minmax(0, 1fr))`,
+                    gridTemplateColumns: `repeat(6, minmax(0, 1fr))`,
                     maxWidth: '92%'
                   }}
                 >
-                  {Array.from({ length: 35 }).map((_, index) => {
+                  {Array.from({ length: 42 }).map((_, index) => {
                     const isActive = selectedSlots.includes(index);
                     return (
                       <div 
@@ -1094,7 +1093,7 @@ export default function PassportStudio() {
                             setSelectedSlots([...selectedSlots, index]);
                           }
                         }}
-                        className={`aspect-[3.6/3.9] relative flex items-center justify-center overflow-hidden cursor-pointer transition-all border
+                        className={`aspect-[3.1/3.7] relative flex items-center justify-center overflow-hidden cursor-pointer transition-all border
                           ${isActive 
                             ? 'border-solid border-gray-950 bg-gray-50' 
                             : 'border-dashed border-gray-300 bg-gray-100 hover:bg-gray-200'}`}
