@@ -145,5 +145,30 @@ export function warpPerspective(img, points, destWidth, destHeight, rotation = 0
   }
 
   ctx.putImageData(destData, 0, 0);
-  return canvas.toDataURL('image/jpeg', 0.95);
+
+  if (rotation === 0) {
+    return canvas.toDataURL('image/jpeg', 0.95);
+  }
+
+  // Rotate the warped canvas by the rotation angle so it matches the UI rotation
+  const rotRadOutput = (rotation * Math.PI) / 180;
+  const cosOutput = Math.abs(Math.cos(rotRadOutput));
+  const sinOutput = Math.abs(Math.sin(rotRadOutput));
+  const rotatedW = Math.round(cosOutput * destWidth + sinOutput * destHeight);
+  const rotatedH = Math.round(sinOutput * destWidth + cosOutput * destHeight);
+
+  const rotatedCanvas = document.createElement('canvas');
+  rotatedCanvas.width = rotatedW;
+  rotatedCanvas.height = rotatedH;
+  const rCtx = rotatedCanvas.getContext('2d');
+  if (!rCtx) {
+    return canvas.toDataURL('image/jpeg', 0.95);
+  }
+
+  rCtx.translate(rotatedW / 2, rotatedH / 2);
+  rCtx.rotate(rotRadOutput);
+  rCtx.translate(-destWidth / 2, -destHeight / 2);
+  rCtx.drawImage(canvas, 0, 0);
+
+  return rotatedCanvas.toDataURL('image/jpeg', 0.95);
 }

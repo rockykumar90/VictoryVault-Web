@@ -295,8 +295,14 @@ export default function PdfSuite() {
         
         if (!croppedUrl) throw new Error('Perspective warping failed');
 
-        croppedAspect = destW / destH;
-        cropArea = { x: 0, y: 0, width: destW, height: destH };
+        const rotRad = (rotation * Math.PI) / 180;
+        const cos = Math.abs(Math.cos(rotRad));
+        const sin = Math.abs(Math.sin(rotRad));
+        const rotatedW = Math.round(cos * destW + sin * destH);
+        const rotatedH = Math.round(sin * destW + cos * destH);
+
+        croppedAspect = rotatedW / rotatedH;
+        cropArea = { x: 0, y: 0, width: rotatedW, height: rotatedH };
       } else {
         if (!completedCrop) return;
         const { url } = await getCroppedImgFromReactImageCrop(
