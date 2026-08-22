@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { FileText, Camera, Shield, Zap, Sparkles, Image, Check, Minimize2, Combine } from 'lucide-react';
+import { FileText, Camera, Shield, Zap, Sparkles, Image, Check, Minimize2, Combine, FileEdit, Edit3, FileImage } from 'lucide-react';
 
 function ScrollCard({ children, className, index }) {
   const cardRef = useRef(null);
@@ -312,6 +312,87 @@ export default function Dashboard() {
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
                 Sequence range selections
+              </li>
+            </ul>
+          </div>
+        </ScrollCard>
+
+        {/* PDF Editor & Signature Card */}
+        <ScrollCard index={5} className="w-full">
+          <div 
+            onClick={() => setMode('pdf-editor')}
+            className="glass-panel rounded-2xl p-6 md:p-8 cursor-pointer relative overflow-hidden transition-all duration-300 border border-purple-500/30 hover:border-purple-500/60 hover:-translate-y-1 hover:shadow-[0_20px_40px_-15px_rgba(168,85,247,0.3)] group h-full"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl group-hover:bg-purple-500/20 transition-all duration-300"></div>
+            
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center mb-6 shadow-lg shadow-purple-500/20">
+              <FileEdit className="w-7 h-7 text-white" />
+            </div>
+            
+            <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+              PDF Editor & Sign
+              <span className="text-xs font-normal text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">New</span>
+            </h2>
+            <p className="text-gray-400 mb-6 leading-relaxed text-sm">
+              Upload PDF, add typing text or convert to handwriting fonts, clean signature photos with background removal, and attach signatures cleanly.
+            </p>
+
+            <ul className="space-y-2 text-xs text-gray-400">
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                Type normal text & convert to Cursive Handwriting
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                Auto paper background cleaner for signature photos
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                Interactive digital signature pad
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                Drag, resize, position & export print-ready PDF
+              </li>
+            </ul>
+          </div>
+        </ScrollCard>
+        {/* PDF to Photo & Collage Studio Card */}
+        <ScrollCard index={6} className="w-full">
+          <div 
+            onClick={() => setMode('pdf-to-photo')}
+            className="glass-panel rounded-2xl p-6 md:p-8 cursor-pointer relative overflow-hidden transition-all duration-300 border border-emerald-500/30 hover:border-emerald-500/60 hover:-translate-y-1 hover:shadow-[0_20px_40px_-15px_rgba(16,185,129,0.3)] group h-full"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all duration-300"></div>
+            
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-6 shadow-lg shadow-emerald-500/20">
+              <FileImage className="w-7 h-7 text-white" />
+            </div>
+            
+            <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+              PDF to Photo & Collage
+              <span className="text-xs font-normal text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">New HD</span>
+            </h2>
+            <p className="text-gray-400 mb-6 leading-relaxed text-sm">
+              Convert PDF pages or photos into arranged side-by-side or stacked collages, with custom grid, background colors, and HD JPG/JPEG exports.
+            </p>
+
+            <ul className="space-y-2 text-xs text-gray-400">
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                Input PDFs or multiple Photos (JPG, PNG, WebP)
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                Arrange Side-by-Side, Top & Bottom, or 2x2 Grid
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                Re-order, rotate, and adjust background colors
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                Export High-Definition .JPG / .JPEG (Up to 3x HD)
               </li>
             </ul>
           </div>

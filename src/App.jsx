@@ -6,7 +6,9 @@ import PassportStudio from './components/PassportPhoto/PassportStudio';
 import PdfCompressor from './components/PdfCompress/PdfCompressor';
 import ImageCompressor from './components/ImageCompress/ImageCompressor';
 import PdfOrganizer from './components/PdfOrganizer/PdfOrganizer';
-import { ShieldCheck, Layers, FileText, Camera, Minimize2, Image as ImageIcon, Combine } from 'lucide-react';
+import PdfEditor from './components/PdfEditor/PdfEditor';
+import PdfToPhoto from './components/PdfToPhoto/PdfToPhoto';
+import { ShieldCheck, Layers, FileText, Camera, Minimize2, Image as ImageIcon, Combine, FileEdit, FileImage } from 'lucide-react';
 
 export default function App() {
   const currentMode = useAppStore((state) => state.currentMode);
@@ -179,6 +181,26 @@ export default function App() {
               <Combine className="w-3.5 h-3.5" />
               PDF Merge/Split
             </button>
+            <button
+              onClick={() => setMode('pdf-editor')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all
+                ${currentMode === 'pdf-editor' 
+                  ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' 
+                  : 'text-gray-400 hover:text-white border border-transparent'}`}
+            >
+              <FileEdit className="w-3.5 h-3.5" />
+              PDF Editor & Sign
+            </button>
+            <button
+              onClick={() => setMode('pdf-to-photo')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all
+                ${currentMode === 'pdf-to-photo' 
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                  : 'text-gray-400 hover:text-white border border-transparent'}`}
+            >
+              <FileImage className="w-3.5 h-3.5" />
+              PDF to Photo
+            </button>
           </nav>
         )}
       </header>
@@ -186,11 +208,13 @@ export default function App() {
       {/* Main Workspace content */}
       <main className="flex-1 w-full relative z-10 flex flex-col overflow-x-hidden">
         {currentMode === 'dashboard' && <Dashboard />}
+        {currentMode === 'pdf-editor' && <PdfEditor />}
         {currentMode === 'pdf-converter' && <PdfSuite />}
         {currentMode === 'passport-generator' && <PassportStudio />}
         {currentMode === 'pdf-compressor' && <PdfCompressor />}
         {currentMode === 'image-compressor' && <ImageCompressor />}
         {currentMode === 'pdf-organizer' && <PdfOrganizer />}
+        {currentMode === 'pdf-to-photo' && <PdfToPhoto />}
       </main>
 
       {/* Modern Mini Footer */}

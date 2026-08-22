@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export const useAppStore = create((set) => ({
   // Core UI state
-  currentMode: 'dashboard', // 'dashboard' | 'pdf-converter' | 'passport-generator'
+  currentMode: 'dashboard', // 'dashboard' | 'pdf-editor' | 'pdf-converter' | 'passport-generator' | 'pdf-compressor' | 'image-compressor' | 'pdf-organizer' | 'pdf-to-photo'
   setMode: (mode) => set({ currentMode: mode }),
 
   // Document to PDF states
