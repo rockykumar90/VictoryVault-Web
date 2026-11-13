@@ -64,6 +64,43 @@ export default function PassportStudio() {
   const imageRef = useRef(null);
   const [selectedSlots, setSelectedSlots] = useState(Array.from({ length: 8 }, (_, i) => i));
 
+  // Grid Layout Type: '42' (Default: 6x7 standard) or '63' (20% reduced: 7x9 compact, zero margin)
+  const [gridType, setGridType] = useState('42');
+
+  const gridConfig = gridType === '63' ? {
+    cols: 7,
+    rows: 9,
+    totalSlots: 63,
+    photoWidth: 24.7,
+    photoHeight: 29.1,
+    // (210 - 7 * 24.7) / 8 = 37.1 / 8 = 4.6375 mm (Left & Right margins and column gaps are all equally 4.64mm)
+    colGap: (210 - 7 * 24.7) / 8,
+    // (297 - 9 * 29.1) / 10 = 35.1 / 10 = 3.51 mm (Top & Bottom margins and row gaps are all equally 3.51mm)
+    rowGap: (297 - 9 * 29.1) / 10,
+    presets: [7, 14, 21, 28, 35, 42, 49, 56, 63],
+    label: '63 Photos',
+    sublabel: '7 × 9 (Equal Spacing & Margins)'
+  } : {
+    cols: 6,
+    rows: 7,
+    totalSlots: 42,
+    photoWidth: 31,
+    photoHeight: 37,
+    colGap: 2,
+    rowGap: 3,
+    presets: [6, 12, 18, 24, 30, 36, 42],
+    label: '42 Photos',
+    sublabel: '6 × 7 (31 × 37 mm)'
+  };
+
+  const handleGridTypeChange = (type) => {
+    setGridType(type);
+    const newTotal = type === '63' ? 63 : 42;
+    const defaultFill = type === '63' ? 7 : 6;
+    const valid = selectedSlots.filter(id => id < newTotal);
+    setSelectedSlots(valid.length > 0 ? valid : Array.from({ length: defaultFill }, (_, i) => i));
+  };
+
   // Zoom and Pan states
   const cropContainerRef = useRef(null);
   const [zoom, setZoom] = useState(1);
@@ -373,12 +410,12 @@ export default function PassportStudio() {
     const a4Width = 210;
     const a4Height = 297;
     
-    const photoWidth = 31; // mm
-    const photoHeight = 37; // mm
-    const colGap = 2; // mm
-    const rowGap = 3; // mm
-    const cols = 6;
-    const rows = 7;
+    const photoWidth = gridConfig.photoWidth; // mm
+    const photoHeight = gridConfig.photoHeight; // mm
+    const colGap = gridConfig.colGap; // mm
+    const rowGap = gridConfig.rowGap; // mm
+    const cols = gridConfig.cols;
+    const rows = gridConfig.rows;
 
     // Calculate grid starting coordinates to center on A4 page
     const gridWidth = cols * photoWidth + (cols - 1) * colGap;
@@ -387,7 +424,7 @@ export default function PassportStudio() {
     const startX = (a4Width - gridWidth) / 2;
     const startY = (a4Height - gridHeight) / 2;
 
-    for (let i = 0; i < 42; i++) {
+    for (let i = 0; i < gridConfig.totalSlots; i++) {
       if (!selectedSlots.includes(i)) continue;
 
       const col = i % cols;
@@ -411,7 +448,7 @@ export default function PassportStudio() {
       const blobUrl = pdf.output('bloburl');
       window.open(blobUrl, '_blank');
     } else {
-      pdf.save('passport-print-sheet.pdf');
+      pdf.save(`passport-print-sheet-${gridType}photos.pdf`);
     }
   };
 
@@ -431,15 +468,18 @@ export default function PassportStudio() {
 
     const mmToPx = (mm) => Math.round((mm / 25.4) * 300);
 
-    const photoWidthPx = mmToPx(31);
-    const photoHeightPx = mmToPx(37);
-    const colGapPx = mmToPx(2);
-    const rowGapPx = mmToPx(3);
-    const cols = 6;
-    const rows = 7;
+    const photoWidthPx = mmToPx(gridConfig.photoWidth);
+    const photoHeightPx = mmToPx(gridConfig.photoHeight);
+    const colGapPx = mmToPx(gridConfig.colGap);
+    const rowGapPx = mmToPx(gridConfig.rowGap);
+    const cols = gridConfig.cols;
+    const rows = gridConfig.rows;
 
-    const startX = (210 - (cols * 31 + (cols - 1) * 2)) / 2;
-    const startY = (297 - (rows * 37 + (rows - 1) * 3)) / 2;
+    const gridWidthMm = cols * gridConfig.photoWidth + (cols - 1) * gridConfig.colGap;
+    const gridHeightMm = rows * gridConfig.photoHeight + (rows - 1) * gridConfig.rowGap;
+
+    const startX = (210 - gridWidthMm) / 2;
+    const startY = (297 - gridHeightMm) / 2;
 
     const startXPx = mmToPx(startX);
     const startYPx = mmToPx(startY);
@@ -447,14 +487,14 @@ export default function PassportStudio() {
     const img = new Image();
     img.onload = () => {
       // Draw Grid
-      for (let i = 0; i < 42; i++) {
+      for (let i = 0; i < gridConfig.totalSlots; i++) {
         if (!selectedSlots.includes(i)) continue;
 
         const col = i % cols;
         const row = Math.floor(i / cols);
 
-        const x = startXPx + col * (photoWidthPx + colGapPx);
-        const y = startYPx + row * (photoHeightPx + rowGapPx);
+        const x = mmToPx(startX + col * (gridConfig.photoWidth + gridConfig.colGap));
+        const y = mmToPx(startY + row * (gridConfig.photoHeight + gridConfig.rowGap));
 
         // Draw photo
         ctx.drawImage(img, x, y, photoWidthPx, photoHeightPx);
@@ -468,7 +508,7 @@ export default function PassportStudio() {
 
       // Download trigger
       const link = document.createElement('a');
-      link.download = 'passport-print-sheet.jpg';
+      link.download = `passport-print-sheet-${gridType}photos.jpg`;
       link.href = printCanvas.toDataURL('image/jpeg', 0.95);
       link.click();
     };
@@ -988,11 +1028,54 @@ export default function PassportStudio() {
               Printing Grid Setup
             </h3>
 
+            {/* Grid Layout Switcher: 2 Buttons */}
+            <div className="space-y-1.5">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
+                Select Grid Layout
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleGridTypeChange('42')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    gridType === '42'
+                      ? 'border-blue-500 bg-blue-500/15 text-white ring-1 ring-blue-500/50 shadow-md'
+                      : 'border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <div className="text-xs font-bold flex items-center justify-between">
+                    <span>42 Photos</span>
+                    {gridType === '42' && <span className="w-2 h-2 rounded-full bg-blue-400"></span>}
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">6 × 7 (31 × 37 mm)</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleGridTypeChange('63')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    gridType === '63'
+                      ? 'border-blue-500 bg-blue-500/15 text-white ring-1 ring-blue-500/50 shadow-md'
+                      : 'border-white/10 bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <div className="text-xs font-bold flex items-center justify-between">
+                    <span>63 Photos</span>
+                    {gridType === '63' && <span className="w-2 h-2 rounded-full bg-blue-400"></span>}
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">7 × 9 • Equal Spacing & Margins</div>
+                </button>
+              </div>
+            </div>
+
             {/* Photo count selector */}
             <div className="space-y-2">
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Quantity Preset (Auto-Fill)</span>
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Quantity Preset (Auto-Fill)</span>
+                <span className="text-[10px] text-gray-500 font-medium">{selectedSlots.length} / {gridConfig.totalSlots} Slots</span>
+              </div>
               <div className="grid grid-cols-4 gap-2">
-                {[6, 12, 18, 24, 30, 36, 42].map((qty) => (
+                {gridConfig.presets.map((qty) => (
                   <button
                     key={qty}
                     onClick={() => {
@@ -1000,7 +1083,7 @@ export default function PassportStudio() {
                       setSelectedSlots(Array.from({ length: qty }, (_, i) => i));
                     }}
                     className={`py-2 px-1 rounded-xl border text-xs font-bold cursor-pointer transition-all text-center
-                      ${passportCount === qty 
+                      ${selectedSlots.length === qty 
                         ? 'border-blue-500 bg-blue-500/10 text-white shadow-md' 
                         : 'border-white/5 bg-white/2 text-gray-400 hover:text-white hover:bg-white/5'}`}
                   >
@@ -1008,8 +1091,26 @@ export default function PassportStudio() {
                   </button>
                 ))}
               </div>
+              <div className="flex gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSlots(Array.from({ length: gridConfig.totalSlots }, (_, i) => i))}
+                  className="flex-1 py-1.5 px-2 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 text-[10px] text-gray-300 font-semibold cursor-pointer transition-colors"
+                >
+                  Select All ({gridConfig.totalSlots})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSlots([])}
+                  className="flex-1 py-1.5 px-2 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 text-[10px] text-gray-300 font-semibold cursor-pointer transition-colors"
+                >
+                  Clear All
+                </button>
+              </div>
               <p className="text-[10px] text-gray-500 leading-normal mt-1">
-                Centred printing grid with 2mm gaps. Click boxes on the preview map to manually activate/deactivate layout slots.
+                {gridType === '63'
+                  ? `Uniform equal spacing: ${Number(gridConfig.colGap).toFixed(1)}mm col gap / ${Number(gridConfig.rowGap).toFixed(1)}mm row gap (margins match photo gaps).`
+                  : 'Centred printing grid with 2mm col gap / 3mm row gap. Click boxes on the preview map to manually activate/deactivate layout slots.'}
               </p>
             </div>
 
@@ -1056,32 +1157,38 @@ export default function PassportStudio() {
           {/* Sheet Preview Container */}
           <div className="lg:col-span-2 glass-panel rounded-2xl p-6 flex flex-col gap-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">A4 Grid Interactive Map</h3>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">A4 Grid Interactive Map</h3>
+                <span className="text-[11px] text-gray-500 font-medium">{gridConfig.label} • {gridConfig.sublabel}</span>
+              </div>
               <span className="text-xs font-bold text-gray-400">
-                Slots Selected: <strong className="text-blue-400">{selectedSlots.length}</strong> / 42
+                Slots Selected: <strong className="text-blue-400">{selectedSlots.length}</strong> / {gridConfig.totalSlots}
               </span>
             </div>
             
             {/* Mock A4 Paper with Grid */}
             <div className="w-full bg-[#161823] border border-white/5 rounded-xl p-3 sm:p-6 flex items-center justify-center min-h-[380px] sm:min-h-[500px]">
               <div 
-                className="bg-white text-black shadow-2xl relative transition-all duration-300 overflow-hidden flex flex-col justify-center items-center w-full max-w-[340px] aspect-[210/297] p-3 sm:p-4"
+                className="bg-white text-black shadow-2xl relative transition-all duration-300 overflow-hidden w-full max-w-[340px] aspect-[210/297]"
                 style={{ 
                   aspectRatio: '210/297'
                 }}
               >
                 {/* Tiny A4 indicator label */}
-                <div className="absolute top-1 right-2 text-[8px] font-bold text-gray-300 select-none uppercase tracking-widest">A4 Paper</div>
+                <div className="absolute top-1 right-2 text-[8px] font-bold text-gray-300 select-none uppercase tracking-widest z-10 pointer-events-none">A4 Paper</div>
 
-                {/* Grid Layout Preview: Always 42 slots (6x7) */}
+                {/* Grid Layout Preview: 42 slots (6x7) or 63 slots (7x9) */}
                 <div 
-                  className="grid gap-x-[2.5px] gap-y-[3.75px] justify-center w-full"
+                  className="grid w-full h-full"
                   style={{
-                    gridTemplateColumns: `repeat(6, minmax(0, 1fr))`,
-                    maxWidth: '92%'
+                    gridTemplateColumns: `repeat(${gridConfig.cols}, minmax(0, 1fr))`,
+                    gridTemplateRows: `repeat(${gridConfig.rows}, minmax(0, 1fr))`,
+                    columnGap: gridType === '63' ? '2.2%' : '2.5px',
+                    rowGap: gridType === '63' ? '1.18%' : '3.75px',
+                    padding: gridType === '63' ? '1.18% 2.2%' : '14px 10px'
                   }}
                 >
-                  {Array.from({ length: 42 }).map((_, index) => {
+                  {Array.from({ length: gridConfig.totalSlots }).map((_, index) => {
                     const isActive = selectedSlots.includes(index);
                     return (
                       <div 
@@ -1093,7 +1200,7 @@ export default function PassportStudio() {
                             setSelectedSlots([...selectedSlots, index]);
                           }
                         }}
-                        className={`aspect-[3.1/3.7] relative flex items-center justify-center overflow-hidden cursor-pointer transition-all border
+                        className={`w-full h-full relative flex items-center justify-center overflow-hidden cursor-pointer transition-all border
                           ${isActive 
                             ? 'border-solid border-gray-950 bg-gray-50' 
                             : 'border-dashed border-gray-300 bg-gray-100 hover:bg-gray-200'}`}
@@ -1113,7 +1220,7 @@ export default function PassportStudio() {
                             }}
                           />
                         ) : (
-                          <span className="text-[8px] text-gray-400 font-bold select-none">+</span>
+                          <span className="text-[7px] text-gray-400 font-bold select-none">+</span>
                         )}
                       </div>
                     );
